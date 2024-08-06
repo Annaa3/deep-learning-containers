@@ -55,7 +55,7 @@ FRAMEWORK_FIXTURES = (
     "pytorch_training___2__2",
     "pytorch_training___2__1",
     "pytorch_training___2__0",
-    "pytorch_training___1__3",
+    "pytorch_training___1__13",
     "pytorch_training_habana",
     "pytorch_inference",
     "pytorch_inference_eia",
@@ -854,22 +854,6 @@ def existing_ec2_instance_connection(request, ec2_key_file_name, ec2_user_name, 
 
 
 @pytest.fixture(autouse=True)
-def skip_s3plugin_test(request):
-    if "training" in request.fixturenames:
-        img_uri = request.getfixturevalue("training")
-    elif "pytorch_training" in request.fixturenames:
-        img_uri = request.getfixturevalue("pytorch_training")
-    else:
-        return
-    _, fw_ver = get_framework_and_version_from_tag(img_uri)
-    if request.node.get_closest_marker("skip_s3plugin_test"):
-        if Version(fw_ver) not in SpecifierSet("<=1.12.1,>=1.6.0"):
-            pytest.skip(
-                f"s3 plugin is only supported in PT 1.6.0 - 1.12.1, skipping this container with tag {fw_ver}"
-            )
-
-
-@pytest.fixture(autouse=True)
 def skip_trcomp_containers(request):
     if "training" in request.fixturenames:
         img_uri = request.getfixturevalue("training")
@@ -1007,6 +991,7 @@ def skip_serialized_release_pt_test(request):
         return
 
     skip_dict = {
+        "==1.13.*": ["cpu", "cu117"],
         ">=2.1,<2.4": ["cpu", "cu121"],
     }
     if _validate_pytorch_framework_version(
@@ -1159,6 +1144,16 @@ def below_tf213_only():
 
 
 @pytest.fixture(scope="session")
+def below_tf216_only():
+    pass
+
+
+@pytest.fixture(scope="session")
+def skip_tf216():
+    pass
+
+
+@pytest.fixture(scope="session")
 def mx18_and_above_only():
     pass
 
@@ -1291,6 +1286,14 @@ def framework_version_within_limit(metafunc_obj, image):
             "below_tf213_only" in metafunc_obj.fixturenames
             and not is_below_framework_version("2.13", image, image_framework_name)
         )
+        tf216_requirement_failed = (
+            "below_tf216_only" in metafunc_obj.fixturenames
+            and not is_below_framework_version("2.16", image, image_framework_name)
+        )
+        not_tf216_requirement_failed = (
+            "skip_tf216" in metafunc_obj.fixturenames
+            and is_equal_to_framework_version("2.16.*", image, image_framework_name)
+        )
         if (
             tf2_requirement_failed
             or tf21_requirement_failed
@@ -1298,6 +1301,8 @@ def framework_version_within_limit(metafunc_obj, image):
             or tf25_requirement_failed
             or tf23_requirement_failed
             or tf213_requirement_failed
+            or tf216_requirement_failed
+            or not_tf216_requirement_failed
         ):
             return False
     if image_framework_name == "mxnet":
@@ -1419,9 +1424,6 @@ def pytest_configure(config):
         "markers", "skip_inductor_test(): mark test to skip due to dlc being incompatible"
     )
     config.addinivalue_line("markers", "skip_trcomp_containers(): mark test to skip on trcomp dlcs")
-    config.addinivalue_line(
-        "markers", "skip_s3plugin_test(): mark test to skip due to dlc being incompatible"
-    )
     config.addinivalue_line("markers", "deep_canary(): explicitly mark to run as deep canary test")
     config.addinivalue_line("markers", "team(team_name): mark tests that belong to a team")
 
